@@ -2,127 +2,150 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>ちょい下ネタタイピング</title>
+<title>マリオ風1-1ステージ</title>
 <style>
-  body {
-    font-family: sans-serif;
-    text-align: center;
-    background: #111;
-    color: #fff;
-  }
-
-  #game {
-    margin-top: 50px;
-  }
-
-  #word {
-    font-size: 32px;
-    margin: 20px;
-    color: #ff69b4;
-  }
-
-  input {
-    font-size: 20px;
-    padding: 10px;
-    width: 300px;
-    text-align: center;
-  }
-
-  #score {
-    margin-top: 20px;
-    font-size: 24px;
-  }
-
-  #timer {
-    font-size: 24px;
-    color: #00ffff;
-  }
-
-  button {
-    padding: 10px 20px;
-    font-size: 18px;
-    margin-top: 20px;
-    cursor: pointer;
-  }
+  body { margin:0; overflow:hidden; background:skyblue; }
+  canvas { display:block; }
 </style>
 </head>
 <body>
 
-<h1>💋 ちょい下ネタタイピングゲーム 💋</h1>
-
-<div id="game">
-  <div id="timer">時間: 30</div>
-  <div id="word">スタート押してね</div>
-  <input type="text" id="input" disabled>
-  <div id="score">スコア: 0</div>
-  <button onclick="startGame()">スタート</button>
-</div>
+<canvas id="game"></canvas>
 
 <script>
-const words = [
-  "ちょっとえっち",
-  "ドキドキタイム",
-  "秘密の話",
-  "ラブハプニング",
-  "キスしたい",
-  "夜のテンション",
-  "むずむずする",
-  "あぶない展開",
-  "恋の予感",
-  "大胆発言",
-  "こっそり覗く",
-  "甘い誘惑",
-  "ギリギリ発言"
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+canvas.width = 800;
+canvas.height = 400;
+
+const gravity = 0.6;
+let cameraX = 0;
+
+// プレイヤー
+const player = {
+  x: 100,
+  y: 0,
+  w: 30,
+  h: 30,
+  dx: 0,
+  dy: 0,
+  speed: 5,
+  jump: -12,
+  onGround: false
+};
+
+// キー
+const keys = {};
+addEventListener("keydown", e => keys[e.code] = true);
+addEventListener("keyup", e => keys[e.code] = false);
+
+// 足場（1-1風配置）
+const platforms = [
+  {x:0, y:360, w:2000, h:40},
+  {x:300, y:300, w:100, h:20},
+  {x:500, y:260, w:100, h:20},
+  {x:700, y:320, w:60, h:40}, // 土管風
+  {x:900, y:280, w:120, h:20},
+  {x:1200, y:240, w:120, h:20}
 ];
 
-let currentWord = "";
-let score = 0;
-let time = 30;
-let timer;
+// 敵（クリボー風）
+const enemies = [
+  {x:600, y:330, w:30, h:30, dx:-1},
+  {x:1000, y:250, w:30, h:30, dx:-1}
+];
 
-const wordDisplay = document.getElementById("word");
-const input = document.getElementById("input");
-const scoreDisplay = document.getElementById("score");
-const timerDisplay = document.getElementById("timer");
+// 更新
+function update(){
+  // 操作
+  if(keys["ArrowRight"]) player.dx = player.speed;
+  else if(keys["ArrowLeft"]) player.dx = -player.speed;
+  else player.dx = 0;
 
-function startGame() {
-  score = 0;
-  time = 30;
-  input.disabled = false;
-  input.value = "";
-  input.focus();
-  nextWord();
-
-  timer = setInterval(() => {
-    time--;
-    timerDisplay.textContent = "時間: " + time;
-
-    if (time <= 0) {
-      clearInterval(timer);
-      endGame();
-    }
-  }, 1000);
-}
-
-function nextWord() {
-  currentWord = words[Math.floor(Math.random() * words.length)];
-  wordDisplay.textContent = currentWord;
-}
-
-input.addEventListener("input", () => {
-  if (input.value === currentWord) {
-    score++;
-    scoreDisplay.textContent = "スコア: " + score;
-    input.value = "";
-    nextWord();
+  if(keys["Space"] && player.onGround){
+    player.dy = player.jump;
+    player.onGround = false;
   }
-});
 
-function endGame() {
-  wordDisplay.textContent = "終了！スコア: " + score;
-  input.disabled = true;
+  player.dy += gravity;
+  player.x += player.dx;
+  player.y += player.dy;
+
+  // 足場判定
+  player.onGround = false;
+  for(let p of platforms){
+    if(player.x < p.x+p.w &&
+       player.x+player.w > p.x &&
+       player.y+player.h < p.y+10 &&
+       player.y+player.h+player.dy >= p.y){
+        player.y = p.y - player.h;
+        player.dy = 0;
+        player.onGround = true;
+    }
+  }
+
+  // 敵
+  for(let e of enemies){
+    e.x += e.dx;
+
+    // プレイヤーと衝突
+    if(player.x < e.x+e.w &&
+       player.x+player.w > e.x &&
+       player.y < e.y+e.h &&
+       player.y+player.h > e.y){
+
+       // 上から踏む
+       if(player.dy > 0){
+         e.dead = true;
+         player.dy = -8;
+       } else {
+         player.x = 100; // リセット
+         player.y = 0;
+       }
+    }
+  }
+
+  // カメラ
+  cameraX = player.x - 200;
 }
+
+// 描画
+function draw(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  ctx.save();
+  ctx.translate(-cameraX,0);
+
+  // 足場
+  ctx.fillStyle = "green";
+  for(let p of platforms){
+    ctx.fillRect(p.x,p.y,p.w,p.h);
+  }
+
+  // 敵
+  ctx.fillStyle = "brown";
+  for(let e of enemies){
+    if(!e.dead) ctx.fillRect(e.x,e.y,e.w,e.h);
+  }
+
+  // プレイヤー
+  ctx.fillStyle = "red";
+  ctx.fillRect(player.x,player.y,player.w,player.h);
+
+  ctx.restore();
+}
+
+// ループ
+function loop(){
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+
+loop();
 </script>
 
 </body>
 </html>
+
