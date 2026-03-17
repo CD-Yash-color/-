@@ -2,53 +2,23 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>避けゲー</title>
+<title>ウェーブ式避けゲー</title>
 <style>
-  body {
-    margin: 0;
-    overflow: hidden;
-    background: #111;
-    color: white;
-    font-family: sans-serif;
-  }
-  #game {
-    position: relative;
-    width: 100vw;
-    height: 100vh;
-  }
-  .player {
-    position: absolute;
-    width: 20px;
-    height: 20px;
-    background: cyan;
-  }
-  .enemy {
-    position: absolute;
-    width: 15px;
-    height: 15px;
-    background: red;
-    border-radius: 50%;
-  }
-  #score {
-    position: absolute;
-    top: 10px;
-    left: 10px;
-    font-size: 18px;
-  }
-  #gameover {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    font-size: 32px;
-    display: none;
-  }
+  body { margin:0; overflow:hidden; background:#111; color:white; font-family:sans-serif; }
+  #game { position:relative; width:100vw; height:100vh; }
+  .player { position:absolute; width:20px; height:20px; background:cyan; }
+  .enemy { position:absolute; width:15px; height:15px; background:red; border-radius:50%; }
+  #ui { position:absolute; top:10px; left:10px; }
+  #gameover { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:32px; display:none; text-align:center; }
 </style>
 </head>
 <body>
 <div id="game">
   <div id="player" class="player"></div>
-  <div id="score">Score: 0</div>
+  <div id="ui">
+    <div id="score">Score: 0</div>
+    <div id="wave">Wave: 1</div>
+  </div>
   <div id="gameover">GAME OVER<br>クリックで再開</div>
 </div>
 
@@ -56,104 +26,130 @@
 const player = document.getElementById("player");
 const game = document.getElementById("game");
 const scoreText = document.getElementById("score");
+const waveText = document.getElementById("wave");
 const gameoverText = document.getElementById("gameover");
 
-let playerX = window.innerWidth / 2;
-let playerY = window.innerHeight / 2;
+let playerX = window.innerWidth/2;
+let playerY = window.innerHeight/2;
 let speed = 5;
 let enemies = [];
 let score = 0;
 let isGameOver = false;
 
-const keys = {};
-document.addEventListener("keydown", e => keys[e.key] = true);
-document.addEventListener("keyup", e => keys[e.key] = false);
+let wave = 1;
+let enemiesToSpawn = 5;
+let spawned = 0;
 
-function spawnEnemy() {
+const keys = {};
+document.addEventListener("keydown", e=>keys[e.key]=true);
+document.addEventListener("keyup", e=>keys[e.key]=false);
+
+function spawnEnemy(){
+  if(spawned >= enemiesToSpawn) return;
+
   const enemy = document.createElement("div");
   enemy.classList.add("enemy");
 
-  const side = Math.floor(Math.random() * 4);
-  let x, y;
+  const side = Math.floor(Math.random()*4);
+  let x,y;
+  if(side===0){x=0;y=Math.random()*window.innerHeight;}
+  if(side===1){x=window.innerWidth;y=Math.random()*window.innerHeight;}
+  if(side===2){x=Math.random()*window.innerWidth;y=0;}
+  if(side===3){x=Math.random()*window.innerWidth;y=window.innerHeight;}
 
-  if (side === 0) { x = 0; y = Math.random() * window.innerHeight; }
-  if (side === 1) { x = window.innerWidth; y = Math.random() * window.innerHeight; }
-  if (side === 2) { x = Math.random() * window.innerWidth; y = 0; }
-  if (side === 3) { x = Math.random() * window.innerWidth; y = window.innerHeight; }
+  enemy.x=x; enemy.y=y;
 
-  enemy.x = x;
-  enemy.y = y;
+  const dx = playerX-x;
+  const dy = playerY-y;
+  const dist = Math.hypot(dx,dy);
 
-  const dx = playerX - x;
-  const dy = playerY - y;
-  const dist = Math.hypot(dx, dy);
-
-  enemy.vx = dx / dist * 2;
-  enemy.vy = dy / dist * 2;
+  const speedScale = 1 + wave*0.3;
+  enemy.vx = dx/dist * speedScale;
+  enemy.vy = dy/dist * speedScale;
 
   game.appendChild(enemy);
   enemies.push(enemy);
+  spawned++;
 }
 
-function update() {
-  if (isGameOver) return;
+function nextWave(){
+  wave++;
+  enemiesToSpawn += 3; // どんどん増える
+  spawned = 0;
+  waveText.textContent = "Wave: "+wave;
+}
 
-  // プレイヤー移動
-  if (keys["ArrowUp"] || keys["w"]) playerY -= speed;
-  if (keys["ArrowDown"] || keys["s"]) playerY += speed;
-  if (keys["ArrowLeft"] || keys["a"]) playerX -= speed;
-  if (keys["ArrowRight"] || keys["d"]) playerX += speed;
+function update(){
+  if(isGameOver) return;
 
-  playerX = Math.max(0, Math.min(window.innerWidth - 20, playerX));
-  playerY = Math.max(0, Math.min(window.innerHeight - 20, playerY));
+  // 移動
+  if(keys["ArrowUp"]||keys["w"]) playerY-=speed;
+  if(keys["ArrowDown"]||keys["s"]) playerY+=speed;
+  if(keys["ArrowLeft"]||keys["a"]) playerX-=speed;
+  if(keys["ArrowRight"]||keys["d"]) playerX+=speed;
 
-  player.style.left = playerX + "px";
-  player.style.top = playerY + "px";
+  playerX=Math.max(0,Math.min(window.innerWidth-20,playerX));
+  playerY=Math.max(0,Math.min(window.innerHeight-20,playerY));
+
+  player.style.left=playerX+"px";
+  player.style.top=playerY+"px";
 
   // 敵更新
-  enemies.forEach(enemy => {
-    enemy.x += enemy.vx;
-    enemy.y += enemy.vy;
+  enemies.forEach((enemy,i)=>{
+    enemy.x+=enemy.vx;
+    enemy.y+=enemy.vy;
 
-    enemy.style.left = enemy.x + "px";
-    enemy.style.top = enemy.y + "px";
+    enemy.style.left=enemy.x+"px";
+    enemy.style.top=enemy.y+"px";
 
-    // 当たり判定
-    const dx = playerX - enemy.x;
-    const dy = playerY - enemy.y;
-    if (Math.hypot(dx, dy) < 15) {
-      gameOver();
+    const dx = playerX-enemy.x;
+    const dy = playerY-enemy.y;
+    if(Math.hypot(dx,dy)<15){ gameOver(); }
+
+    // 画面外に出たら削除
+    if(enemy.x< -20 || enemy.x>window.innerWidth+20 || enemy.y< -20 || enemy.y>window.innerHeight+20){
+      enemy.remove();
+      enemies.splice(i,1);
     }
   });
 
+  // ウェーブ終了判定
+  if(spawned >= enemiesToSpawn && enemies.length===0){
+    nextWave();
+  }
+
   score++;
-  scoreText.textContent = "Score: " + score;
+  scoreText.textContent="Score: "+score;
 
   requestAnimationFrame(update);
 }
 
-function gameOver() {
-  isGameOver = true;
-  gameoverText.style.display = "block";
+function gameOver(){
+  isGameOver=true;
+  gameoverText.style.display="block";
 }
 
-function reset() {
-  enemies.forEach(e => e.remove());
-  enemies = [];
-  playerX = window.innerWidth / 2;
-  playerY = window.innerHeight / 2;
-  score = 0;
-  isGameOver = false;
-  gameoverText.style.display = "none";
+function reset(){
+  enemies.forEach(e=>e.remove());
+  enemies=[];
+  playerX=window.innerWidth/2;
+  playerY=window.innerHeight/2;
+  score=0;
+  wave=1;
+  enemiesToSpawn=5;
+  spawned=0;
+  isGameOver=false;
+  gameoverText.style.display="none";
+  waveText.textContent="Wave: 1";
   update();
 }
 
-setInterval(() => {
-  if (!isGameOver) spawnEnemy();
-}, 1000);
+setInterval(()=>{
+  if(!isGameOver) spawnEnemy();
+},500);
 
-game.addEventListener("click", () => {
-  if (isGameOver) reset();
+game.addEventListener("click",()=>{
+  if(isGameOver) reset();
 });
 
 update();
