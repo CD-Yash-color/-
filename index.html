@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>ウェーブ式避けゲー</title>
+<title>高難易度ウェーブ避けゲー</title>
 <style>
   body { margin:0; overflow:hidden; background:#111; color:white; font-family:sans-serif; }
   #game { position:relative; width:100vw; height:100vh; }
@@ -31,13 +31,13 @@ const gameoverText = document.getElementById("gameover");
 
 let playerX = window.innerWidth/2;
 let playerY = window.innerHeight/2;
-let speed = 5;
+let speed = 4; // 少し遅くして難化
 let enemies = [];
 let score = 0;
 let isGameOver = false;
 
 let wave = 1;
-let enemiesToSpawn = 5;
+let enemiesToSpawn = 12; // 初期から多い
 let spawned = 0;
 
 const keys = {};
@@ -63,7 +63,7 @@ function spawnEnemy(){
   const dy = playerY-y;
   const dist = Math.hypot(dx,dy);
 
-  const speedScale = 1 + wave*0.3;
+  const speedScale = 2 + wave*0.6; // 最初から速い
   enemy.vx = dx/dist * speedScale;
   enemy.vy = dy/dist * speedScale;
 
@@ -74,7 +74,7 @@ function spawnEnemy(){
 
 function nextWave(){
   wave++;
-  enemiesToSpawn += 3; // どんどん増える
+  enemiesToSpawn += 5; // 増加量も多い
   spawned = 0;
   waveText.textContent = "Wave: "+wave;
 }
@@ -94,7 +94,6 @@ function update(){
   player.style.left=playerX+"px";
   player.style.top=playerY+"px";
 
-  // 敵更新
   enemies.forEach((enemy,i)=>{
     enemy.x+=enemy.vx;
     enemy.y+=enemy.vy;
@@ -106,14 +105,12 @@ function update(){
     const dy = playerY-enemy.y;
     if(Math.hypot(dx,dy)<15){ gameOver(); }
 
-    // 画面外に出たら削除
     if(enemy.x< -20 || enemy.x>window.innerWidth+20 || enemy.y< -20 || enemy.y>window.innerHeight+20){
       enemy.remove();
       enemies.splice(i,1);
     }
   });
 
-  // ウェーブ終了判定
   if(spawned >= enemiesToSpawn && enemies.length===0){
     nextWave();
   }
@@ -136,7 +133,7 @@ function reset(){
   playerY=window.innerHeight/2;
   score=0;
   wave=1;
-  enemiesToSpawn=5;
+  enemiesToSpawn=12;
   spawned=0;
   isGameOver=false;
   gameoverText.style.display="none";
@@ -146,7 +143,7 @@ function reset(){
 
 setInterval(()=>{
   if(!isGameOver) spawnEnemy();
-},500);
+},300); // 出現も早い
 
 game.addEventListener("click",()=>{
   if(isGameOver) reset();
