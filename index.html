@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>ちょい下ネタタイピング</title>
+<style>
+  body {
+    font-family: sans-serif;
+    text-align: center;
+    background: #111;
+    color: #fff;
+  }
+
+  #game {
+    margin-top: 50px;
+  }
+
+  #word {
+    font-size: 32px;
+    margin: 20px;
+    color: #ff69b4;
+  }
+
+  input {
+    font-size: 20px;
+    padding: 10px;
+    width: 300px;
+    text-align: center;
+  }
+
+  #score {
+    margin-top: 20px;
+    font-size: 24px;
+  }
+
+  #timer {
+    font-size: 24px;
+    color: #00ffff;
+  }
+
+  button {
+    padding: 10px 20px;
+    font-size: 18px;
+    margin-top: 20px;
+    cursor: pointer;
+  }
+</style>
+</head>
+<body>
+
+<h1>💋 ちょい下ネタタイピングゲーム 💋</h1>
+
+<div id="game">
+  <div id="timer">時間: 30</div>
+  <div id="word">スタート押してね</div>
+  <input type="text" id="input" disabled>
+  <div id="score">スコア: 0</div>
+  <button onclick="startGame()">スタート</button>
+</div>
+
+<script>
+const words = [
+  "ちょっとえっち",
+  "ドキドキタイム",
+  "秘密の話",
+  "ラブハプニング",
+  "キスしたい",
+  "夜のテンション",
+  "むずむずする",
+  "あぶない展開",
+  "恋の予感",
+  "大胆発言",
+  "こっそり覗く",
+  "甘い誘惑",
+  "ギリギリ発言"
+];
+
+let currentWord = "";
+let score = 0;
+let time = 30;
+let timer;
+
+const wordDisplay = document.getElementById("word");
+const input = document.getElementById("input");
+const scoreDisplay = document.getElementById("score");
+const timerDisplay = document.getElementById("timer");
+
+function startGame() {
+  score = 0;
+  time = 30;
+  input.disabled = false;
+  input.value = "";
+  input.focus();
+  nextWord();
+
+  timer = setInterval(() => {
+    time--;
+    timerDisplay.textContent = "時間: " + time;
+
+    if (time <= 0) {
+      clearInterval(timer);
+      endGame();
+    }
+  }, 1000);
+}
+
+function nextWord() {
+  currentWord = words[Math.floor(Math.random() * words.length)];
+  wordDisplay.textContent = currentWord;
+}
+
+input.addEventListener("input", () => {
+  if (input.value === currentWord) {
+    score++;
+    scoreDisplay.textContent = "スコア: " + score;
+    input.value = "";
+    nextWord();
+  }
+});
+
+function endGame() {
+  wordDisplay.textContent = "終了！スコア: " + score;
+  input.disabled = true;
+}
+</script>
+
+</body>
+</html>
