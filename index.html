@@ -2,14 +2,16 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>高難易度ウェーブ避けゲー</title>
+<title>オンライン対戦＋ランキング避けゲー（Firebase版）</title>
 <style>
-  body { margin:0; overflow:hidden; background:#111; color:white; font-family:sans-serif; }
-  #game { position:relative; width:100vw; height:100vh; }
-  .player { position:absolute; width:20px; height:20px; background:cyan; }
-  .enemy { position:absolute; width:15px; height:15px; background:red; border-radius:50%; }
-  #ui { position:absolute; top:10px; left:10px; }
-  #gameover { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:32px; display:none; text-align:center; }
+body { margin:0; overflow:hidden; background:#111; color:white; font-family:sans-serif; }
+#game { position:relative; width:100vw; height:100vh; }
+.player { position:absolute; width:20px; height:20px; background:cyan; }
+.enemy { position:absolute; width:15px; height:15px; background:red; border-radius:50%; }
+.other { background:yellow; }
+#ui { position:absolute; top:10px; left:10px; }
+#ranking { margin-top:10px; font-size:14px; }
+#gameover { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:32px; display:none; text-align:center; }
 </style>
 </head>
 <body>
@@ -19,17 +21,74 @@
     <div id="score">Score: 0</div>
     <div id="highscore">High Score: 0</div>
     <div id="wave">Wave: 1</div>
+    <div id="ranking">ランキング読み込み中...</div>
   </div>
   <div id="gameover">GAME OVER<br>クリックで再開</div>
 </div>
 
+<!-- Socket.IO（対戦用） -->
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+
+<!-- Firebase（ランキング用） -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+// ⚠️ここを自分のFirebase設定に書き換える
+const firebaseConfig = {
+  apiKey: "ここにAPIキー",
+  authDomain: "ここにauthDomain",
+  databaseURL: "ここにdatabaseURL（重要）",
+  projectId: "ここにprojectId",
+  storageBucket: "ここにstorageBucket",
+  messagingSenderId: "ここにsenderId",
+  appId: "ここにappId"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+
+// スコア送信
+window.sendScore = function(name, score){
+  const id = Date.now();
+  set(ref(db, 'scores/' + id), {
+    name: name,
+    score: score
+  });
+};
+
+// ランキング取得（リアルタイム）
+window.startRanking = function(){
+  onValue(ref(db, 'scores'), (snapshot) => {
+    const data = snapshot.val();
+    if(!data) return;
+
+    let scores = [];
+    for(let id in data){ scores.push(data[id]); }
+
+    scores.sort((a,b)=>b.score-a.score);
+
+    let text = "TOP5<br>";
+    scores.slice(0,5).forEach((s,i)=>{
+      text += `${i+1}: ${s.name} (${s.score})<br>`;
+    });
+
+    document.getElementById("ranking").innerHTML = text;
+  });
+};
+</script>
+
 <script>
+const socket = io("http://localhost:3000");
+
 const player = document.getElementById("player");
 const game = document.getElementById("game");
 const scoreText = document.getElementById("score");
 const highscoreText = document.getElementById("highscore");
 const waveText = document.getElementById("wave");
 const gameoverText = document.getElementById("gameover");
+
+let name = prompt("名前を入力");
 
 let playerX = window.innerWidth/2;
 let playerY = window.innerHeight/2;
@@ -42,9 +101,15 @@ let wave = 1;
 let enemiesToSpawn = 12;
 let spawned = 0;
 
-// ハイスコア読み込み
 let highscore = localStorage.getItem("dodgeHighScore") || 0;
 highscoreText.textContent = "High Score: " + highscore;
+
+let otherPlayers = {};
+
+socket.on("currentPlayers", (players)=>{ otherPlayers = players; });
+socket.on("newPlayer", (p)=>{ otherPlayers[p.id]=p; });
+socket.on("playerMoved", (data)=>{ otherPlayers[data.id]=data; });
+socket.on("playerDisconnected", (id)=>{ delete otherPlayers[id]; });
 
 const keys = {};
 document.addEventListener("keydown", e=>keys[e.key]=true);
@@ -93,11 +158,26 @@ function update(){
   if(keys["ArrowLeft"]||keys["a"]) playerX-=speed;
   if(keys["ArrowRight"]||keys["d"]) playerX+=speed;
 
-  playerX=Math.max(0,Math.min(window.innerWidth-20,playerX));
-  playerY=Math.max(0,Math.min(window.innerHeight-20,playerY));
-
   player.style.left=playerX+"px";
   player.style.top=playerY+"px";
+
+  socket.emit("move", { x: playerX, y: playerY });
+
+  for(let id in otherPlayers){
+    if(id === socket.id) continue;
+    let p = otherPlayers[id];
+    let el = document.getElementById("p_"+id);
+
+    if(!el){
+      el = document.createElement("div");
+      el.id = "p_"+id;
+      el.classList.add("player","other");
+      game.appendChild(el);
+    }
+
+    el.style.left = p.x + "px";
+    el.style.top = p.y + "px";
+  }
 
   enemies.forEach((enemy,i)=>{
     enemy.x+=enemy.vx;
@@ -106,9 +186,7 @@ function update(){
     enemy.style.left=enemy.x+"px";
     enemy.style.top=enemy.y+"px";
 
-    const dx = playerX-enemy.x;
-    const dy = playerY-enemy.y;
-    if(Math.hypot(dx,dy)<15){ gameOver(); }
+    if(Math.hypot(playerX-enemy.x, playerY-enemy.y)<15){ gameOver(); }
 
     if(enemy.x< -20 || enemy.x>window.innerWidth+20 || enemy.y< -20 || enemy.y>window.innerHeight+20){
       enemy.remove();
@@ -116,9 +194,7 @@ function update(){
     }
   });
 
-  if(spawned >= enemiesToSpawn && enemies.length===0){
-    nextWave();
-  }
+  if(spawned >= enemiesToSpawn && enemies.length===0){ nextWave(); }
 
   score++;
   scoreText.textContent="Score: "+score;
@@ -130,19 +206,18 @@ function gameOver(){
   isGameOver=true;
   gameoverText.style.display="block";
 
-  // ハイスコア更新
   if(score > highscore){
     highscore = score;
     localStorage.setItem("dodgeHighScore", highscore);
     highscoreText.textContent = "High Score: " + highscore;
   }
+
+  sendScore(name, score);
 }
 
 function reset(){
   enemies.forEach(e=>e.remove());
   enemies=[];
-  playerX=window.innerWidth/2;
-  playerY=window.innerHeight/2;
   score=0;
   wave=1;
   enemiesToSpawn=12;
@@ -153,14 +228,11 @@ function reset(){
   update();
 }
 
-setInterval(()=>{
-  if(!isGameOver) spawnEnemy();
-},300);
+setInterval(()=>{ if(!isGameOver) spawnEnemy(); },300);
 
-game.addEventListener("click",()=>{
-  if(isGameOver) reset();
-});
+game.addEventListener("click",()=>{ if(isGameOver) reset(); });
 
+startRanking();
 update();
 </script>
 </body>
