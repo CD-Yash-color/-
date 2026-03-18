@@ -2,15 +2,14 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>オンライン対戦＋ランキング避けゲー（Firebase版）</title>
+<title>避けゲー（ボス戦追加版）</title>
 <style>
 body { margin:0; overflow:hidden; background:#111; color:white; font-family:sans-serif; }
 #game { position:relative; width:100vw; height:100vh; }
 .player { position:absolute; width:20px; height:20px; background:cyan; }
 .enemy { position:absolute; width:15px; height:15px; background:red; border-radius:50%; }
-.other { background:yellow; }
+.boss { position:absolute; width:80px; height:80px; background:purple; border-radius:50%; }
 #ui { position:absolute; top:10px; left:10px; }
-#ranking { margin-top:10px; font-size:14px; }
 #gameover { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:32px; display:none; text-align:center; }
 </style>
 </head>
@@ -19,81 +18,25 @@ body { margin:0; overflow:hidden; background:#111; color:white; font-family:sans
   <div id="player" class="player"></div>
   <div id="ui">
     <div id="score">Score: 0</div>
-    <div id="highscore">High Score: 0</div>
     <div id="wave">Wave: 1</div>
-    <div id="ranking">ランキング読み込み中...</div>
+    <div id="bossTimer"></div>
   </div>
   <div id="gameover">GAME OVER<br>クリックで再開</div>
 </div>
 
-<!-- Socket.IO（対戦用） -->
-<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-
-<!-- Firebase（ランキング用） -->
-<script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
-
-// ⚠️ここを自分のFirebase設定に書き換える
-const firebaseConfig = {
-  apiKey: "ここにAPIキー",
-  authDomain: "ここにauthDomain",
-  databaseURL: "ここにdatabaseURL（重要）",
-  projectId: "ここにprojectId",
-  storageBucket: "ここにstorageBucket",
-  messagingSenderId: "ここにsenderId",
-  appId: "ここにappId"
-};
-
-const app = initializeApp(firebaseConfig);
-const db = getDatabase(app);
-
-// スコア送信
-window.sendScore = function(name, score){
-  const id = Date.now();
-  set(ref(db, 'scores/' + id), {
-    name: name,
-    score: score
-  });
-};
-
-// ランキング取得（リアルタイム）
-window.startRanking = function(){
-  onValue(ref(db, 'scores'), (snapshot) => {
-    const data = snapshot.val();
-    if(!data) return;
-
-    let scores = [];
-    for(let id in data){ scores.push(data[id]); }
-
-    scores.sort((a,b)=>b.score-a.score);
-
-    let text = "TOP5<br>";
-    scores.slice(0,5).forEach((s,i)=>{
-      text += `${i+1}: ${s.name} (${s.score})<br>`;
-    });
-
-    document.getElementById("ranking").innerHTML = text;
-  });
-};
-</script>
-
 <script>
-const socket = io("http://localhost:3000");
-
 const player = document.getElementById("player");
 const game = document.getElementById("game");
 const scoreText = document.getElementById("score");
-const highscoreText = document.getElementById("highscore");
 const waveText = document.getElementById("wave");
+const bossTimerText = document.getElementById("bossTimer");
 const gameoverText = document.getElementById("gameover");
-
-let name = prompt("名前を入力");
 
 let playerX = window.innerWidth/2;
 let playerY = window.innerHeight/2;
 let speed = 4;
 let enemies = [];
+let boss = null;
 let score = 0;
 let isGameOver = false;
 
@@ -101,15 +44,8 @@ let wave = 1;
 let enemiesToSpawn = 12;
 let spawned = 0;
 
-let highscore = localStorage.getItem("dodgeHighScore") || 0;
-highscoreText.textContent = "High Score: " + highscore;
-
-let otherPlayers = {};
-
-socket.on("currentPlayers", (players)=>{ otherPlayers = players; });
-socket.on("newPlayer", (p)=>{ otherPlayers[p.id]=p; });
-socket.on("playerMoved", (data)=>{ otherPlayers[data.id]=data; });
-socket.on("playerDisconnected", (id)=>{ delete otherPlayers[id]; });
+let isBoss = false;
+let bossTime = 0;
 
 const keys = {};
 document.addEventListener("keydown", e=>keys[e.key]=true);
@@ -121,26 +57,48 @@ function spawnEnemy(){
   const enemy = document.createElement("div");
   enemy.classList.add("enemy");
 
-  const side = Math.floor(Math.random()*4);
-  let x,y;
-  if(side===0){x=0;y=Math.random()*window.innerHeight;}
-  if(side===1){x=window.innerWidth;y=Math.random()*window.innerHeight;}
-  if(side===2){x=Math.random()*window.innerWidth;y=0;}
-  if(side===3){x=Math.random()*window.innerWidth;y=window.innerHeight;}
+  const x = Math.random()*window.innerWidth;
+  const y = 0;
 
   enemy.x=x; enemy.y=y;
-
-  const dx = playerX-x;
-  const dy = playerY-y;
-  const dist = Math.hypot(dx,dy);
-
-  const speedScale = 2 + wave*0.6;
-  enemy.vx = dx/dist * speedScale;
-  enemy.vy = dy/dist * speedScale;
+  enemy.vy = 2 + wave*0.5;
 
   game.appendChild(enemy);
   enemies.push(enemy);
   spawned++;
+}
+
+function startBoss(){
+  isBoss = true;
+  bossTime = 10;
+  bossTimerText.textContent = "BOSS: 10";
+
+  boss = document.createElement("div");
+  boss.classList.add("boss");
+  boss.x = window.innerWidth/2;
+  boss.y = 100;
+  game.appendChild(boss);
+}
+
+function bossAttack(){
+  if(!boss) return;
+
+  for(let i=0;i<8+wave;i++){
+    const bullet = document.createElement("div");
+    bullet.classList.add("enemy");
+
+    bullet.x = boss.x+40;
+    bullet.y = boss.y+40;
+
+    const angle = (Math.PI*2)*(i/(8+wave));
+    const speed = 3 + wave*0.3;
+
+    bullet.vx = Math.cos(angle)*speed;
+    bullet.vy = Math.sin(angle)*speed;
+
+    game.appendChild(bullet);
+    enemies.push(bullet);
+  }
 }
 
 function nextWave(){
@@ -148,6 +106,8 @@ function nextWave(){
   enemiesToSpawn += 5;
   spawned = 0;
   waveText.textContent = "Wave: "+wave;
+
+  if(wave % 5 === 0){ startBoss(); }
 }
 
 function update(){
@@ -161,40 +121,44 @@ function update(){
   player.style.left=playerX+"px";
   player.style.top=playerY+"px";
 
-  socket.emit("move", { x: playerX, y: playerY });
+  if(isBoss){
+    boss.style.left = boss.x+"px";
+    boss.style.top = boss.y+"px";
 
-  for(let id in otherPlayers){
-    if(id === socket.id) continue;
-    let p = otherPlayers[id];
-    let el = document.getElementById("p_"+id);
+    if(Math.random()<0.1) bossAttack();
 
-    if(!el){
-      el = document.createElement("div");
-      el.id = "p_"+id;
-      el.classList.add("player","other");
-      game.appendChild(el);
+    bossTime -= 1/60;
+    bossTimerText.textContent = "BOSS: "+bossTime.toFixed(1);
+
+    if(bossTime <= 0){
+      boss.remove();
+      boss = null;
+      isBoss = false;
+      bossTimerText.textContent = "";
+      enemies.forEach(e=>e.remove());
+      enemies=[];
+      nextWave();
     }
+  } else {
+    spawnEnemy();
 
-    el.style.left = p.x + "px";
-    el.style.top = p.y + "px";
+    if(spawned >= enemiesToSpawn && enemies.length===0){ nextWave(); }
   }
 
   enemies.forEach((enemy,i)=>{
-    enemy.x+=enemy.vx;
-    enemy.y+=enemy.vy;
+    enemy.x += enemy.vx || 0;
+    enemy.y += enemy.vy || 2;
 
     enemy.style.left=enemy.x+"px";
     enemy.style.top=enemy.y+"px";
 
     if(Math.hypot(playerX-enemy.x, playerY-enemy.y)<15){ gameOver(); }
 
-    if(enemy.x< -20 || enemy.x>window.innerWidth+20 || enemy.y< -20 || enemy.y>window.innerHeight+20){
+    if(enemy.y>window.innerHeight || enemy.x<0 || enemy.x>window.innerWidth){
       enemy.remove();
       enemies.splice(i,1);
     }
   });
-
-  if(spawned >= enemiesToSpawn && enemies.length===0){ nextWave(); }
 
   score++;
   scoreText.textContent="Score: "+score;
@@ -205,34 +169,26 @@ function update(){
 function gameOver(){
   isGameOver=true;
   gameoverText.style.display="block";
-
-  if(score > highscore){
-    highscore = score;
-    localStorage.setItem("dodgeHighScore", highscore);
-    highscoreText.textContent = "High Score: " + highscore;
-  }
-
-  sendScore(name, score);
 }
 
 function reset(){
   enemies.forEach(e=>e.remove());
   enemies=[];
+  if(boss) boss.remove();
+  boss=null;
   score=0;
   wave=1;
   enemiesToSpawn=12;
   spawned=0;
   isGameOver=false;
+  isBoss=false;
   gameoverText.style.display="none";
   waveText.textContent="Wave: 1";
   update();
 }
 
-setInterval(()=>{ if(!isGameOver) spawnEnemy(); },300);
-
 game.addEventListener("click",()=>{ if(isGameOver) reset(); });
 
-startRanking();
 update();
 </script>
 </body>
