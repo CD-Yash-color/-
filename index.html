@@ -53,10 +53,19 @@ let bossTime = 0;
 
 const keys = {};
 document.addEventListener("keydown", e=>{
+  // 押しっぱなし防止
+  if(e.repeat) return;
+
   keys[e.key]=true;
-  if(e.key === "p"){
+
+  if(e.key === "p" || e.key === "P"){
     isPaused = !isPaused;
     pauseText.style.display = isPaused ? "block" : "none";
+
+    // ポーズ解除時にループ再開
+    if(!isPaused && !isGameOver){
+      requestAnimationFrame(update);
+    }
   }
 });
 document.addEventListener("keyup", e=>keys[e.key]=false);
