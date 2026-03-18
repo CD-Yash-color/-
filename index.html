@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>避けゲー（ボス戦・オフライン版）</title>
+<title>避けゲー（改良版）</title>
 <style>
 body { margin:0; overflow:hidden; background:#111; color:white; font-family:sans-serif; }
 #game { position:relative; width:100vw; height:100vh; }
@@ -47,23 +47,34 @@ let spawned = 0;
 let isBoss = false;
 let bossTime = 0;
 
-let highscore = localStorage.getItem("dodgeHighScore") || 0;
-
 const keys = {};
 document.addEventListener("keydown", e=>keys[e.key]=true);
 document.addEventListener("keyup", e=>keys[e.key]=false);
 
+// 全方向から出現
 function spawnEnemy(){
   if(spawned >= enemiesToSpawn) return;
 
   const enemy = document.createElement("div");
   enemy.classList.add("enemy");
 
-  const x = Math.random()*window.innerWidth;
-  const y = 0;
+  const side = Math.floor(Math.random()*4);
+  let x,y;
+
+  if(side===0){ x=0; y=Math.random()*window.innerHeight; }
+  if(side===1){ x=window.innerWidth; y=Math.random()*window.innerHeight; }
+  if(side===2){ x=Math.random()*window.innerWidth; y=0; }
+  if(side===3){ x=Math.random()*window.innerWidth; y=window.innerHeight; }
 
   enemy.x=x; enemy.y=y;
-  enemy.vy = 2 + wave*0.5;
+
+  const dx = playerX-x;
+  const dy = playerY-y;
+  const dist = Math.hypot(dx,dy);
+
+  const speedScale = 2.5 + wave*0.6;
+  enemy.vx = dx/dist * speedScale;
+  enemy.vy = dy/dist * speedScale;
 
   game.appendChild(enemy);
   enemies.push(enemy);
@@ -78,34 +89,77 @@ function startBoss(){
   boss = document.createElement("div");
   boss.classList.add("boss");
   boss.x = window.innerWidth/2 - 40;
-  boss.y = 100;
+  boss.y = window.innerHeight/2 - 40;
   game.appendChild(boss);
 }
 
+// 動き続けないと避けれない弾幕
 function bossAttack(){
   if(!boss) return;
 
-  for(let i=0;i<10+wave;i++){
-    const bullet = document.createElement("div");
-    bullet.classList.add("enemy");
+  const pattern = Math.floor(Date.now()/500) % 3;
 
-    bullet.x = boss.x+40;
-    bullet.y = boss.y+40;
+  if(pattern === 0){
+    // 回転弾
+    for(let i=0;i<16;i++){
+      const bullet = document.createElement("div");
+      bullet.classList.add("enemy");
 
-    const angle = (Math.PI*2)*(i/(10+wave));
-    const speed = 3 + wave*0.3;
+      const angle = i * (Math.PI*2/16) + Date.now()/300;
+      const speed = 3.5 + wave*0.4;
 
-    bullet.vx = Math.cos(angle)*speed;
-    bullet.vy = Math.sin(angle)*speed;
+      bullet.x = boss.x+40;
+      bullet.y = boss.y+40;
+      bullet.vx = Math.cos(angle)*speed;
+      bullet.vy = Math.sin(angle)*speed;
 
-    game.appendChild(bullet);
-    enemies.push(bullet);
+      game.appendChild(bullet);
+      enemies.push(bullet);
+    }
+  }
+
+  if(pattern === 1){
+    // プレイヤー狙い弾
+    for(let i=0;i<8;i++){
+      const bullet = document.createElement("div");
+      bullet.classList.add("enemy");
+
+      const dx = playerX - (boss.x+40);
+      const dy = playerY - (boss.y+40);
+      const dist = Math.hypot(dx,dy);
+
+      const speed = 4 + wave*0.5;
+
+      bullet.x = boss.x+40;
+      bullet.y = boss.y+40;
+      bullet.vx = dx/dist * speed + (Math.random()-0.5);
+      bullet.vy = dy/dist * speed + (Math.random()-0.5);
+
+      game.appendChild(bullet);
+      enemies.push(bullet);
+    }
+  }
+
+  if(pattern === 2){
+    // 壁弾（詰むやつ）
+    for(let i=0;i<10;i++){
+      const bullet = document.createElement("div");
+      bullet.classList.add("enemy");
+
+      bullet.x = i*(window.innerWidth/10);
+      bullet.y = 0;
+      bullet.vx = 0;
+      bullet.vy = 5 + wave*0.4;
+
+      game.appendChild(bullet);
+      enemies.push(bullet);
+    }
   }
 }
 
 function nextWave(){
   wave++;
-  enemiesToSpawn += 5;
+  enemiesToSpawn += 6;
   spawned = 0;
   waveText.textContent = "Wave: "+wave;
 
@@ -124,10 +178,7 @@ function update(){
   player.style.top=playerY+"px";
 
   if(isBoss){
-    boss.style.left = boss.x+"px";
-    boss.style.top = boss.y+"px";
-
-    if(Math.random()<0.12) bossAttack();
+    if(Math.random()<0.2) bossAttack();
 
     bossTime -= 1/60;
     bossTimerText.textContent = "BOSS: "+bossTime.toFixed(1);
@@ -149,14 +200,14 @@ function update(){
 
   enemies.forEach((enemy,i)=>{
     enemy.x += enemy.vx || 0;
-    enemy.y += enemy.vy || 2;
+    enemy.y += enemy.vy || 0;
 
     enemy.style.left=enemy.x+"px";
     enemy.style.top=enemy.y+"px";
 
     if(Math.hypot(playerX-enemy.x, playerY-enemy.y)<15){ gameOver(); }
 
-    if(enemy.y>window.innerHeight || enemy.x<0 || enemy.x>window.innerWidth){
+    if(enemy.x< -20 || enemy.x>window.innerWidth+20 || enemy.y< -20 || enemy.y>window.innerHeight+20){
       enemy.remove();
       enemies.splice(i,1);
     }
@@ -171,11 +222,6 @@ function update(){
 function gameOver(){
   isGameOver=true;
   gameoverText.style.display="block";
-
-  if(score > highscore){
-    highscore = score;
-    localStorage.setItem("dodgeHighScore", highscore);
-  }
 }
 
 function reset(){
@@ -200,3 +246,4 @@ update();
 </script>
 </body>
 </html>
+
