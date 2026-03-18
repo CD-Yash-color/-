@@ -17,6 +17,7 @@
   <div id="player" class="player"></div>
   <div id="ui">
     <div id="score">Score: 0</div>
+    <div id="highscore">High Score: 0</div>
     <div id="wave">Wave: 1</div>
   </div>
   <div id="gameover">GAME OVER<br>クリックで再開</div>
@@ -26,19 +27,24 @@
 const player = document.getElementById("player");
 const game = document.getElementById("game");
 const scoreText = document.getElementById("score");
+const highscoreText = document.getElementById("highscore");
 const waveText = document.getElementById("wave");
 const gameoverText = document.getElementById("gameover");
 
 let playerX = window.innerWidth/2;
 let playerY = window.innerHeight/2;
-let speed = 4; // 少し遅くして難化
+let speed = 4;
 let enemies = [];
 let score = 0;
 let isGameOver = false;
 
 let wave = 1;
-let enemiesToSpawn = 12; // 初期から多い
+let enemiesToSpawn = 12;
 let spawned = 0;
+
+// ハイスコア読み込み
+let highscore = localStorage.getItem("dodgeHighScore") || 0;
+highscoreText.textContent = "High Score: " + highscore;
 
 const keys = {};
 document.addEventListener("keydown", e=>keys[e.key]=true);
@@ -63,7 +69,7 @@ function spawnEnemy(){
   const dy = playerY-y;
   const dist = Math.hypot(dx,dy);
 
-  const speedScale = 2 + wave*0.6; // 最初から速い
+  const speedScale = 2 + wave*0.6;
   enemy.vx = dx/dist * speedScale;
   enemy.vy = dy/dist * speedScale;
 
@@ -74,7 +80,7 @@ function spawnEnemy(){
 
 function nextWave(){
   wave++;
-  enemiesToSpawn += 5; // 増加量も多い
+  enemiesToSpawn += 5;
   spawned = 0;
   waveText.textContent = "Wave: "+wave;
 }
@@ -82,7 +88,6 @@ function nextWave(){
 function update(){
   if(isGameOver) return;
 
-  // 移動
   if(keys["ArrowUp"]||keys["w"]) playerY-=speed;
   if(keys["ArrowDown"]||keys["s"]) playerY+=speed;
   if(keys["ArrowLeft"]||keys["a"]) playerX-=speed;
@@ -124,6 +129,13 @@ function update(){
 function gameOver(){
   isGameOver=true;
   gameoverText.style.display="block";
+
+  // ハイスコア更新
+  if(score > highscore){
+    highscore = score;
+    localStorage.setItem("dodgeHighScore", highscore);
+    highscoreText.textContent = "High Score: " + highscore;
+  }
 }
 
 function reset(){
@@ -143,7 +155,7 @@ function reset(){
 
 setInterval(()=>{
   if(!isGameOver) spawnEnemy();
-},300); // 出現も早い
+},300);
 
 game.addEventListener("click",()=>{
   if(isGameOver) reset();
