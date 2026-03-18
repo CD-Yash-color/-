@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>避けゲー（ボス戦追加版）</title>
+<title>避けゲー（ボス戦・オフライン版）</title>
 <style>
 body { margin:0; overflow:hidden; background:#111; color:white; font-family:sans-serif; }
 #game { position:relative; width:100vw; height:100vh; }
@@ -47,6 +47,8 @@ let spawned = 0;
 let isBoss = false;
 let bossTime = 0;
 
+let highscore = localStorage.getItem("dodgeHighScore") || 0;
+
 const keys = {};
 document.addEventListener("keydown", e=>keys[e.key]=true);
 document.addEventListener("keyup", e=>keys[e.key]=false);
@@ -75,7 +77,7 @@ function startBoss(){
 
   boss = document.createElement("div");
   boss.classList.add("boss");
-  boss.x = window.innerWidth/2;
+  boss.x = window.innerWidth/2 - 40;
   boss.y = 100;
   game.appendChild(boss);
 }
@@ -83,14 +85,14 @@ function startBoss(){
 function bossAttack(){
   if(!boss) return;
 
-  for(let i=0;i<8+wave;i++){
+  for(let i=0;i<10+wave;i++){
     const bullet = document.createElement("div");
     bullet.classList.add("enemy");
 
     bullet.x = boss.x+40;
     bullet.y = boss.y+40;
 
-    const angle = (Math.PI*2)*(i/(8+wave));
+    const angle = (Math.PI*2)*(i/(10+wave));
     const speed = 3 + wave*0.3;
 
     bullet.vx = Math.cos(angle)*speed;
@@ -125,7 +127,7 @@ function update(){
     boss.style.left = boss.x+"px";
     boss.style.top = boss.y+"px";
 
-    if(Math.random()<0.1) bossAttack();
+    if(Math.random()<0.12) bossAttack();
 
     bossTime -= 1/60;
     bossTimerText.textContent = "BOSS: "+bossTime.toFixed(1);
@@ -169,6 +171,11 @@ function update(){
 function gameOver(){
   isGameOver=true;
   gameoverText.style.display="block";
+
+  if(score > highscore){
+    highscore = score;
+    localStorage.setItem("dodgeHighScore", highscore);
+  }
 }
 
 function reset(){
