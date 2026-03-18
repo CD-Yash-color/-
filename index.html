@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>避けゲー（改良版）</title>
+<title>避けゲー（ポーズ機能付き）</title>
 <style>
 body { margin:0; overflow:hidden; background:#111; color:white; font-family:sans-serif; }
 #game { position:relative; width:100vw; height:100vh; }
@@ -10,6 +10,7 @@ body { margin:0; overflow:hidden; background:#111; color:white; font-family:sans
 .enemy { position:absolute; width:15px; height:15px; background:red; border-radius:50%; }
 .boss { position:absolute; width:80px; height:80px; background:purple; border-radius:50%; }
 #ui { position:absolute; top:10px; left:10px; }
+#pause { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:40px; display:none; }
 #gameover { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:32px; display:none; text-align:center; }
 </style>
 </head>
@@ -21,6 +22,7 @@ body { margin:0; overflow:hidden; background:#111; color:white; font-family:sans
     <div id="wave">Wave: 1</div>
     <div id="bossTimer"></div>
   </div>
+  <div id="pause">PAUSE</div>
   <div id="gameover">GAME OVER<br>クリックで再開</div>
 </div>
 
@@ -31,6 +33,7 @@ const scoreText = document.getElementById("score");
 const waveText = document.getElementById("wave");
 const bossTimerText = document.getElementById("bossTimer");
 const gameoverText = document.getElementById("gameover");
+const pauseText = document.getElementById("pause");
 
 let playerX = window.innerWidth/2;
 let playerY = window.innerHeight/2;
@@ -39,6 +42,7 @@ let enemies = [];
 let boss = null;
 let score = 0;
 let isGameOver = false;
+let isPaused = false;
 
 let wave = 1;
 let enemiesToSpawn = 12;
@@ -48,10 +52,15 @@ let isBoss = false;
 let bossTime = 0;
 
 const keys = {};
-document.addEventListener("keydown", e=>keys[e.key]=true);
+document.addEventListener("keydown", e=>{
+  keys[e.key]=true;
+  if(e.key === "p"){
+    isPaused = !isPaused;
+    pauseText.style.display = isPaused ? "block" : "none";
+  }
+});
 document.addEventListener("keyup", e=>keys[e.key]=false);
 
-// 全方向から出現
 function spawnEnemy(){
   if(spawned >= enemiesToSpawn) return;
 
@@ -93,14 +102,12 @@ function startBoss(){
   game.appendChild(boss);
 }
 
-// 動き続けないと避けれない弾幕
 function bossAttack(){
   if(!boss) return;
 
   const pattern = Math.floor(Date.now()/500) % 3;
 
   if(pattern === 0){
-    // 回転弾
     for(let i=0;i<16;i++){
       const bullet = document.createElement("div");
       bullet.classList.add("enemy");
@@ -119,7 +126,6 @@ function bossAttack(){
   }
 
   if(pattern === 1){
-    // プレイヤー狙い弾
     for(let i=0;i<8;i++){
       const bullet = document.createElement("div");
       bullet.classList.add("enemy");
@@ -141,7 +147,6 @@ function bossAttack(){
   }
 
   if(pattern === 2){
-    // 壁弾（詰むやつ）
     for(let i=0;i<10;i++){
       const bullet = document.createElement("div");
       bullet.classList.add("enemy");
@@ -167,7 +172,7 @@ function nextWave(){
 }
 
 function update(){
-  if(isGameOver) return;
+  if(isGameOver || isPaused) return;
 
   if(keys["ArrowUp"]||keys["w"]) playerY-=speed;
   if(keys["ArrowDown"]||keys["s"]) playerY+=speed;
@@ -235,6 +240,8 @@ function reset(){
   spawned=0;
   isGameOver=false;
   isBoss=false;
+  isPaused=false;
+  pauseText.style.display="none";
   gameoverText.style.display="none";
   waveText.textContent="Wave: 1";
   update();
@@ -246,4 +253,3 @@ update();
 </script>
 </body>
 </html>
-
